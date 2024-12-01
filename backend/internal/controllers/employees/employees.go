@@ -23,6 +23,7 @@ type Model interface {
 	GetAllProjects(ctx context.Context) ([]string, error)
 	GetAllCities(ctx context.Context) ([]string, error)
 	GetByID(ctx context.Context, id string) (*model.Employee, error)
+	GetTree(ctx context.Context, id string) (*model.Employee, error)
 }
 
 type Controller struct {
@@ -52,6 +53,7 @@ func (c *Controller) Register() *chi.Mux {
 	r.Get("/", c.GetAll)
 	r.Get("/{id}", c.GetByID)
 	r.Get("/filters", c.GetFilters)
+	r.Get("/tree/{id}", c.GetTree)
 
 	return r
 }
@@ -192,6 +194,33 @@ func (c *Controller) GetByID(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Error("failed to fetch employee", slog.Any("error", err))
+		http_lib.ErrInternal(w, r)
+		return
+	}
+
+	render.JSON(w, r, employee)
+}
+
+func (c *Controller) GetTree(w http.ResponseWriter, r *http.Request) {
+	const op = "controller.employees.GetTree"
+
+	log := http_lib.GetCtxLogger(r.Context())
+	log = log.With(slog.String("op", op))
+
+	idStr := chi.URLParam(r, "id")
+	if idStr == "" {
+		http_lib.ErrBadRequest(w, r)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		http_lib.ErrBadRequest(w, r)
+		return
+	}
+
+	employee, err := c.model.GetTree(r.Context(), idStr)
+	if err != nil {
 		http_lib.ErrInternal(w, r)
 		return
 	}

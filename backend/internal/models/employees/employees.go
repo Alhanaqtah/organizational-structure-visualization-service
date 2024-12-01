@@ -2,6 +2,7 @@ package employees
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,17 +20,21 @@ var (
 )
 
 type Employee struct {
-	ID          string    `json:"id"`
-	FirstName   string    `json:"first_name"`
-	MiddleName  string    `json:"middle_name"`
-	LastName    string    `json:"last_name"`
-	Position    string    `json:"position,omitempty"`
-	Department  string    `json:"department,omitempty"`
-	Subdivision string    `json:"subdivision,omitempty"`
-	Role        string    `json:"role,omitempty"`
-	Project     string    `json:"project,omitempty"`
-	City        string    `json:"city,omitempty"`
-	HireDate    time.Time `json:"hire_date,omitempty"`
+	ID           int        `json:"id"`
+	FirstName    string     `json:"first_name"`
+	MiddleName   string     `json:"middle_name"`
+	LastName     string     `json:"last_name"`
+	Position     string     `json:"position,omitempty"`
+	Department   string     `json:"department,omitempty"`
+	Subdivision  string     `json:"subdivision,omitempty"`
+	Role         string     `json:"role,omitempty"`
+	Project      string     `json:"project,omitempty"`
+	City         string     `json:"city,omitempty"`
+	HireDate     time.Time  `json:"hire_date,omitempty"`
+	HeadID       int        `json:"-"`
+	Subordinates []Employee `json:"subordinates,omitempty"`
+	Colleagues   []Employee `json:"colleagues,omitempty"`
+	Managers     []Employee `json:"managers,omitempty"`
 }
 
 type Filters map[string][]string
@@ -182,6 +187,220 @@ func (m *Model) GetByID(ctx context.Context, id string) (*Employee, error) {
 		}
 		return nil, fmt.Errorf("%s: failed to query employee: %w", op, err)
 	}
+
+	return &employee, nil
+}
+
+func (m *Model) GetTree(ctx context.Context, id string) (*Employee, error) {
+	const op = "model.employees.GetTree"
+
+	log := http_lib.GetCtxLogger(ctx)
+	log = slog.With(slog.String("op", op))
+
+	var headID sql.NullInt64
+	// Получаем информацию о сотруднике
+	queryEmployee := `SELECT 
+        e.id,
+        e.first_name,
+        e.middle_name,
+        e.last_name,
+        p.title AS position,
+        d.title AS department,
+        s.title AS subdivision,
+        r.title AS role,
+        pr.title AS project,
+		e.head_id,
+        o.city
+    FROM 
+        public.employees e
+    LEFT JOIN public.positions p ON e.position_id = p.id
+    LEFT JOIN public.divisions s ON e.division_id = s.id
+    LEFT JOIN public.departments d ON s.department_id = d.id
+    LEFT JOIN public.roles r ON e.role_id = r.id
+    LEFT JOIN public.projects pr ON e.project_id = pr.id
+    LEFT JOIN public.offices o ON o.id = d.office_id
+    WHERE 
+        e.id = $1`
+
+	row := m.pool.QueryRow(ctx, queryEmployee, id)
+
+	var employee Employee
+	if err := row.Scan(
+		&employee.ID,
+		&employee.FirstName,
+		&employee.MiddleName,
+		&employee.LastName,
+		&employee.Position,
+		&employee.Department,
+		&employee.Subdivision,
+		&employee.Role,
+		&employee.Project,
+		&headID,
+		&employee.City,
+	); err != nil {
+		log.Error("failed to get employee", sl.Err(err))
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	if headID.Valid {
+		employee.HeadID = int(headID.Int64)
+	}
+
+	var head Employee
+	var subordinates []Employee
+	var colleagues []Employee
+
+	// Получаем информацию о руководителе
+	if headID.Valid {
+		queryHead := `SELECT
+		e.ID,
+        e.first_name,
+        e.middle_name,
+        e.last_name,
+        p.title AS position,
+        d.title AS department,
+        s.title AS subdivision,
+        r.title AS role,
+        pr.title AS project,
+        o.city
+    FROM 
+        public.employees e
+    LEFT JOIN public.positions p ON e.position_id = p.id
+    LEFT JOIN public.divisions s ON e.division_id = s.id
+    LEFT JOIN public.departments d ON s.department_id = d.id
+    LEFT JOIN public.roles r ON e.role_id = r.id
+    LEFT JOIN public.projects pr ON e.project_id = pr.id
+    LEFT JOIN public.offices o ON o.id = d.office_id
+    WHERE e.id = $1`
+
+		rowHead := m.pool.QueryRow(ctx, queryHead, employee.HeadID)
+
+		if err := rowHead.Scan(
+			&head.ID,
+			&head.FirstName,
+			&head.MiddleName,
+			&head.LastName,
+			&head.Position,
+			&head.Department,
+			&head.Subdivision,
+			&head.Role,
+			&head.Project,
+			&head.City,
+		); err != nil {
+			log.Error("failed to get head", sl.Err(err))
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+
+		// Получаем коллег
+		queryColleagues := `SELECT 
+        e.id,
+        e.first_name,
+        e.middle_name,
+        e.last_name,
+        p.title AS position,
+        d.title AS department,
+        s.title AS subdivision,
+        r.title AS role,
+        pr.title AS project,
+        o.city
+    FROM 
+        public.employees e
+    LEFT JOIN public.positions p ON e.position_id = p.id
+    LEFT JOIN public.divisions s ON e.division_id = s.id
+    LEFT JOIN public.departments d ON s.department_id = d.id
+    LEFT JOIN public.roles r ON e.role_id = r.id
+    LEFT JOIN public.projects pr ON e.project_id = pr.id
+    LEFT JOIN public.offices o ON o.id = d.office_id
+    WHERE e.head_id = $1 AND e.id <> $2`
+
+		rowsColleagues, err := m.pool.Query(ctx, queryColleagues, employee.HeadID, employee.ID)
+		if err != nil {
+			log.Error("failed to get colleagues", sl.Err(err))
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+		defer rowsColleagues.Close()
+
+		for rowsColleagues.Next() {
+			var colleague Employee
+			if err := rowsColleagues.Scan(
+				&colleague.ID,
+				&colleague.FirstName,
+				&colleague.MiddleName,
+				&colleague.LastName,
+				&colleague.Position,
+				&colleague.Department,
+				&colleague.Subdivision,
+				&colleague.Role,
+				&colleague.Project,
+				&colleague.City,
+			); err != nil {
+				log.Error("failed to scan colleague", sl.Err(err))
+				return nil, fmt.Errorf("%s: %w", op, err)
+			}
+			colleagues = append(colleagues, colleague)
+		}
+		if err := rowsColleagues.Err(); err != nil {
+			log.Error("failed to iterate over colleagues", sl.Err(err))
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+	}
+
+	// Получаем подчинённых
+	querySubordinates := `SELECT 
+        e.id,
+        e.first_name,
+        e.middle_name,
+        e.last_name,
+        p.title AS position,
+        d.title AS department,
+        s.title AS subdivision,
+        r.title AS role,
+        pr.title AS project,
+        o.city
+    FROM 
+        public.employees e
+    LEFT JOIN public.positions p ON e.position_id = p.id
+    LEFT JOIN public.divisions s ON e.division_id = s.id
+    LEFT JOIN public.departments d ON s.department_id = d.id
+    LEFT JOIN public.roles r ON e.role_id = r.id
+    LEFT JOIN public.projects pr ON e.project_id = pr.id
+    LEFT JOIN public.offices o ON o.id = d.office_id
+    WHERE e.head_id = $1`
+
+	rowsSubordinates, err := m.pool.Query(ctx, querySubordinates, employee.ID)
+	if err != nil {
+		log.Error("failed to get subordinates", sl.Err(err))
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	defer rowsSubordinates.Close()
+
+	for rowsSubordinates.Next() {
+		var subordinate Employee
+		if err := rowsSubordinates.Scan(
+			&subordinate.ID,
+			&subordinate.FirstName,
+			&subordinate.MiddleName,
+			&subordinate.LastName,
+			&subordinate.Position,
+			&subordinate.Department,
+			&subordinate.Subdivision,
+			&subordinate.Role,
+			&subordinate.Project,
+			&subordinate.City,
+		); err != nil {
+			log.Error("failed to scan subordinate", sl.Err(err))
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+		subordinates = append(subordinates, subordinate)
+	}
+	if err := rowsSubordinates.Err(); err != nil {
+		log.Error("failed to iterate over subordinates", sl.Err(err))
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	employee.Managers = append(employee.Managers, head)
+	employee.Colleagues = colleagues
+	employee.Subordinates = subordinates
 
 	return &employee, nil
 }
