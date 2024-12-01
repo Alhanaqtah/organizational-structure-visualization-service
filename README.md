@@ -43,7 +43,12 @@ HTTP_SERVER_IDLE=4
 #### **b. Start PostgreSQL Using Docker**
 Make sure you have Docker installed and running. Use the following command to start a PostgreSQL container:
 ```bash
-docker run --name org-structure-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -p 2345:5432 -d postgres
+docker run --name org-structure-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -p 2345:5432 \
+  -v ./internal/dev/data/dump.sql:/docker-entrypoint-initdb.d/dump.sql \
+  -d postgres
 ```
 
 #### **c. Start the Backend Server**
