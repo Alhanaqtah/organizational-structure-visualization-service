@@ -17,7 +17,7 @@ cd organizational-structure-visualization-service
 ### **2. Frontend Setup**
 Navigate to the frontend directory, install dependencies, and start the development server:
 ```bash
-cd frontend
+cd client
 npm install
 npm run dev
 ```
