@@ -139,27 +139,33 @@ func (c *Controller) GetFilters(w http.ResponseWriter, r *http.Request) {
 
 	filters := []map[string]interface{}{
 		{
-			"filter": "Должности",
+			"filter": "position",
+			"name":   "Должности",
 			"values": positions,
 		},
 		{
-			"filter": "Департаменты",
+			"filter": "department",
+			"name":   "Департаменты",
 			"values": departments,
 		},
 		{
-			"filter": "Подразделения",
+			"filter": "subdivision",
+			"name":   "Подразделения",
 			"values": subdivisions,
 		},
 		{
-			"filter": "Роли",
+			"filter": "role",
+			"name":   "Роли",
 			"values": roles,
 		},
 		{
-			"filter": "Проекты",
+			"filter": "project",
+			"name":   "Проекты",
 			"values": projects,
 		},
 		{
-			"filter": "Города",
+			"filter": "city",
+			"name":   "Города",
 			"values": cities,
 		},
 	}
