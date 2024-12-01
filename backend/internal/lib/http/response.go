@@ -77,6 +77,14 @@ func ErrUnauthorized(w http.ResponseWriter, r *http.Request, msg string) {
 	})
 }
 
+func ErrNotFound(w http.ResponseWriter, r *http.Request) {
+	render.Status(r, http.StatusNotFound)
+	render.Render(w, r, Response{
+		Status:  StatusErr,
+		Message: "Not found",
+	})
+}
+
 func ErrInvalid(w http.ResponseWriter, r *http.Request, err error) {
 	errs := make(validationErrors)
 

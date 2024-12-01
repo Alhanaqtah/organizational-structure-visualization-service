@@ -2,6 +2,7 @@ package employees
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -9,7 +10,12 @@ import (
 	http_lib "organizational-structure-visualization-service/internal/lib/http"
 	"organizational-structure-visualization-service/pkg/logger/sl"
 
+	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+var (
+	ErrNotFound = errors.New("not found")
 )
 
 type Employee struct {
@@ -134,4 +140,48 @@ func (m *Model) getDistinctValues(ctx context.Context, column, table string) ([]
 	}
 
 	return values, nil
+}
+
+func (m *Model) GetByID(ctx context.Context, id string) (*Employee, error) {
+	const op = "model.employees.GetByID"
+
+	// Проверка валидности ID
+	if id == "" {
+		return nil, fmt.Errorf("%s: id is required", op)
+	}
+
+	query := `
+		SELECT e.id, e.first_name, e.middle_name, e.last_name, 
+		       p.title AS position, d.title AS department, r.title AS role, pr.title AS project, o.city
+		FROM public.employees e
+		JOIN public.positions p ON e.position_id = p.id
+		JOIN public.divisions d ON e.division_id = d.id
+		JOIN public.departments dept ON d.department_id = dept.id
+		JOIN public.roles r ON e.role_id = r.id
+		JOIN public.projects pr ON e.project_id = pr.id
+		JOIN public.offices o ON dept.office_id = o.id
+		WHERE 
+			e.id = $1
+	`
+
+	var employee Employee
+	err := m.pool.QueryRow(ctx, query, id).Scan(
+		&employee.ID,
+		&employee.FirstName,
+		&employee.MiddleName,
+		&employee.LastName,
+		&employee.Position,
+		&employee.Department,
+		&employee.Role,
+		&employee.Project,
+		&employee.City,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("%s: employee not found: %w", op, ErrNotFound)
+		}
+		return nil, fmt.Errorf("%s: failed to query employee: %w", op, err)
+	}
+
+	return &employee, nil
 }

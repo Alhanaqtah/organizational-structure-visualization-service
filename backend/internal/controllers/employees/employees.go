@@ -22,6 +22,7 @@ type Model interface {
 	GetAllRoles(ctx context.Context) ([]string, error)
 	GetAllProjects(ctx context.Context) ([]string, error)
 	GetAllCities(ctx context.Context) ([]string, error)
+	GetByID(ctx context.Context, id string) (*model.Employee, error)
 }
 
 type Controller struct {
@@ -49,6 +50,7 @@ func (c *Controller) Register() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Get("/", c.GetAll)
+	r.Get("/{id}", c.GetByID)
 	r.Get("/filters", c.GetFilters)
 
 	return r
@@ -163,6 +165,40 @@ func (c *Controller) GetFilters(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, filters)
 }
 
+func (c *Controller) GetByID(w http.ResponseWriter, r *http.Request) {
+	const op = "controller.employees.GetByID"
+
+	log := http_lib.GetCtxLogger(r.Context())
+	log = log.With(slog.String("op", op))
+
+	idStr := chi.URLParam(r, "id")
+	if idStr == "" {
+		http_lib.ErrBadRequest(w, r)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		http_lib.ErrBadRequest(w, r)
+		return
+	}
+
+	// Получение сотрудника из модели
+	employee, err := c.model.GetByID(r.Context(), idStr)
+	if err != nil {
+		if err == model.ErrNotFound {
+			http_lib.ErrNotFound(w, r)
+			return
+		}
+
+		log.Error("failed to fetch employee", slog.Any("error", err))
+		http_lib.ErrInternal(w, r)
+		return
+	}
+
+	render.JSON(w, r, employee)
+}
+
 func (c *Controller) parseGetAllRequest(r *http.Request, filters model.Filters) {
 	params := r.URL.Query()
 
@@ -218,7 +254,6 @@ func filterEmployees(employees []model.Employee, filters model.Filters) []model.
 	for _, employee := range employees {
 		include := true
 
-		// Применяем фильтрацию для каждого фильтра
 		if position, ok := filters["position"]; ok && len(position) > 0 && !contains(position, employee.Position) {
 			include = false
 		}
