@@ -5,15 +5,13 @@ services:
       dockerfile: Dockerfile
     container_name: backend
     ports:
-      - 8080:800
-    env_file:
-      - ./backend/.env
+      - 8080:8080
     environment:
       - ENV=prod
-      - POSTGRES_URL=${POSTGRES_URL}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - HTTP_SERVER_ADDRESS="backend:8080"
+      - POSTGRES_URL=postgres://postgres:postgres@database:5432/postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - HTTP_SERVER_ADDRESS=backend:8080
       - HTTP_SERVER_IDLE=4
 
   database:
@@ -26,6 +24,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - database_data:/var/lib/postgresql/data
+      - ./backend/dev/data/dump.sql:/docker-entrypoint-initdb.d/dump.sql
 
 volumes:
   database_data:

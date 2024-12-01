@@ -1,18 +1,6 @@
 import { createEffect, createStore } from 'effector';
 import { IEmployeeTree, IEmployeeTreeEl } from '../../shared/types';
 
-// export const getEmployeeTreeFx = createEffect(async (id: string) => {
-//   const response = await fetch(`http://localhost:8080/api/employees/tree/${id}`);
-//   if (!response.ok) {
-//     throw new Error('Failed to fetch employee tree');
-//   }
-//   return (await response.json()) as IEmployeeTree;
-// });
-
-// export const $employeeTreeStore = createStore<IEmployeeTree | null>(null)
-//   .on(getEmployeeTreeFx.doneData, (_, employeeTree) => employeeTree)
-//   .reset(getEmployeeTreeFx.fail);
-
 // Мокированные данные
 const mockData: IEmployeeTree = {
   id: '11',
@@ -126,9 +114,16 @@ const mockData: IEmployeeTree = {
 };
 
 export const getEmployeeTreeFx = createEffect(async (id: string) => {
-  return mockData;
+  try {
+    const response = await fetch(`http://localhost:8080/api/employees/tree/${id}`);
+    if (!response.ok) {
+      return mockData;
+    }
+    return (await response.json()) as IEmployeeTree;
+  } catch (e) {
+    return mockData;
+  }
 });
-
 export const $employeeTreeStore = createStore<IEmployeeTree | null>(null)
   .on(getEmployeeTreeFx.doneData, (_, employeeTree) => employeeTree)
   .reset(getEmployeeTreeFx.fail);
