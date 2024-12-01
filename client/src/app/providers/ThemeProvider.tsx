@@ -11,6 +11,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
             colorPrimary: '#ED1D24',
             algorithm: true,
           },
+          Pagination: {
+            colorPrimary: '#ED1D24',
+            colorPrimaryHover: '#ED1D24',
+          },
         },
       }}
     >
