@@ -2,7 +2,6 @@ package employees
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -17,6 +16,12 @@ import (
 
 type Model interface {
 	GetAll(ctx context.Context, offset, limit int) ([]model.Employee, error)
+	GetAllPositions(ctx context.Context) ([]string, error)
+	GetAllDepartments(ctx context.Context) ([]string, error)
+	GetAllSubdivisions(ctx context.Context) ([]string, error)
+	GetAllRoles(ctx context.Context) ([]string, error)
+	GetAllProjects(ctx context.Context) ([]string, error)
+	GetAllCities(ctx context.Context) ([]string, error)
 }
 
 type Controller struct {
@@ -44,6 +49,7 @@ func (c *Controller) Register() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Get("/", c.GetAll)
+	r.Get("/filters", c.GetFilters)
 
 	return r
 }
@@ -57,21 +63,16 @@ func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
 	filters := make(model.Filters)
 	c.parseGetAllRequest(r, filters)
 
-	log.Debug("filters", slog.Any("f", filters))
-
 	page, limit := c.parsePagination(r)
 
-	// Получаем всех сотрудников без фильтрации
 	empls, err := c.model.GetAll(r.Context(), (page-1)*limit, limit)
 	if err != nil {
 		http_lib.ErrInternal(w, r)
 		return
 	}
 
-	// Применяем фильтрацию в коде
 	filteredEmployees := filterEmployees(empls, filters)
 
-	// Подсчитываем количество сотрудников после фильтрации
 	filteredTotal := len(filteredEmployees)
 
 	response := employeesResponse{
@@ -84,10 +85,86 @@ func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, response)
 }
 
+func (c *Controller) GetFilters(w http.ResponseWriter, r *http.Request) {
+	const op = "controller.employees.GetFilters"
+
+	log := http_lib.GetCtxLogger(r.Context())
+	log = log.With(slog.String("op", op))
+
+	positions, err := c.model.GetAllPositions(r.Context())
+	if err != nil {
+		log.Error("failed to fetch positions", slog.Any("error", err))
+		http_lib.ErrInternal(w, r)
+		return
+	}
+
+	departments, err := c.model.GetAllDepartments(r.Context())
+	if err != nil {
+		log.Error("failed to fetch departments", slog.Any("error", err))
+		http_lib.ErrInternal(w, r)
+		return
+	}
+
+	subdivisions, err := c.model.GetAllSubdivisions(r.Context())
+	if err != nil {
+		log.Error("failed to fetch subdivisions", slog.Any("error", err))
+		http_lib.ErrInternal(w, r)
+		return
+	}
+
+	roles, err := c.model.GetAllRoles(r.Context())
+	if err != nil {
+		log.Error("failed to fetch roles", slog.Any("error", err))
+		http_lib.ErrInternal(w, r)
+		return
+	}
+
+	projects, err := c.model.GetAllProjects(r.Context())
+	if err != nil {
+		log.Error("failed to fetch projects", slog.Any("error", err))
+		http_lib.ErrInternal(w, r)
+		return
+	}
+
+	cities, err := c.model.GetAllCities(r.Context())
+	if err != nil {
+		log.Error("failed to fetch cities", slog.Any("error", err))
+		http_lib.ErrInternal(w, r)
+		return
+	}
+
+	filters := []map[string]interface{}{
+		{
+			"filter": "Должности",
+			"values": positions,
+		},
+		{
+			"filter": "Департаменты",
+			"values": departments,
+		},
+		{
+			"filter": "Подразделения",
+			"values": subdivisions,
+		},
+		{
+			"filter": "Роли",
+			"values": roles,
+		},
+		{
+			"filter": "Проекты",
+			"values": projects,
+		},
+		{
+			"filter": "Города",
+			"values": cities,
+		},
+	}
+
+	render.JSON(w, r, filters)
+}
+
 func (c *Controller) parseGetAllRequest(r *http.Request, filters model.Filters) {
 	params := r.URL.Query()
-
-	log.Printf("params: %v", params)
 
 	for key, values := range params {
 		switch key {
@@ -167,7 +244,6 @@ func filterEmployees(employees []model.Employee, filters model.Filters) []model.
 			include = false
 		}
 
-		// Если сотрудник подходит под фильтры, добавляем его в результат
 		if include {
 			filtered = append(filtered, employee)
 		}
@@ -176,7 +252,6 @@ func filterEmployees(employees []model.Employee, filters model.Filters) []model.
 	return filtered
 }
 
-// Утилита для проверки наличия значения в слайсе
 func contains(slice []string, value string) bool {
 	for _, item := range slice {
 		if item == value {
@@ -186,7 +261,6 @@ func contains(slice []string, value string) bool {
 	return false
 }
 
-// Утилита для проверки наличия строки в поисковой строке
 func containsLike(slice []string, value string) bool {
 	for _, item := range slice {
 		if strings.HasPrefix(strings.ToLower(value), strings.ToLower(item)) {

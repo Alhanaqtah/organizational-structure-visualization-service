@@ -44,7 +44,6 @@ func (m *Model) GetAll(ctx context.Context, offset, limit int) ([]Employee, erro
 	log := http_lib.GetCtxLogger(ctx)
 	log = slog.With(slog.String("op", op))
 
-	// Запрос без фильтрации
 	baseQuery := `
 		SELECT e.id, e.first_name, e.middle_name, e.last_name, 
 		       p.title AS position, d.title AS department, r.title AS role, pr.title AS project, o.city
@@ -67,7 +66,6 @@ func (m *Model) GetAll(ctx context.Context, offset, limit int) ([]Employee, erro
 	var employees []Employee
 	for rows.Next() {
 		var e Employee
-		// Сканируем результат запроса
 		if err := rows.Scan(&e.ID, &e.FirstName, &e.MiddleName, &e.LastName, &e.Position, &e.Department, &e.Role, &e.Project, &e.City); err != nil {
 			log.Error("failed to scan employee", sl.Err(err))
 			return nil, fmt.Errorf("%s: %w", op, err)
@@ -75,11 +73,65 @@ func (m *Model) GetAll(ctx context.Context, offset, limit int) ([]Employee, erro
 		employees = append(employees, e)
 	}
 
-	// Проверка на ошибки при чтении
 	if err := rows.Err(); err != nil {
 		log.Error("failed to read rows", sl.Err(err))
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return employees, nil
+}
+
+// GetAllPositions возвращает уникальные должности
+func (m *Model) GetAllPositions(ctx context.Context) ([]string, error) {
+	return m.getDistinctValues(ctx, "title", "positions")
+}
+
+// GetAllDepartments возвращает уникальные департаменты
+func (m *Model) GetAllDepartments(ctx context.Context) ([]string, error) {
+	return m.getDistinctValues(ctx, "title", "departments")
+}
+
+// GetAllSubdivisions возвращает уникальные подразделения
+func (m *Model) GetAllSubdivisions(ctx context.Context) ([]string, error) {
+	return m.getDistinctValues(ctx, "title", "divisions")
+}
+
+// GetAllRoles возвращает уникальные роли
+func (m *Model) GetAllRoles(ctx context.Context) ([]string, error) {
+	return m.getDistinctValues(ctx, "title", "roles")
+}
+
+// GetAllProjects возвращает уникальные проекты
+func (m *Model) GetAllProjects(ctx context.Context) ([]string, error) {
+	return m.getDistinctValues(ctx, "title", "projects")
+}
+
+// GetAllCities возвращает уникальные города
+func (m *Model) GetAllCities(ctx context.Context) ([]string, error) {
+	return m.getDistinctValues(ctx, "city", "offices")
+}
+
+// Общий метод для получения уникальных значений из указанной таблицы
+func (m *Model) getDistinctValues(ctx context.Context, column, table string) ([]string, error) {
+	query := fmt.Sprintf("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s", column, table, column, column)
+	rows, err := m.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var values []string
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
+	return values, nil
 }
