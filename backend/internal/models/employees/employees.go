@@ -49,47 +49,51 @@ func NewModel(pool *pgxpool.Pool) *Model {
 	}
 }
 
-func (m *Model) GetAll(ctx context.Context, offset, limit int) ([]Employee, error) {
+func (m *Model) GetAll(ctx context.Context, offset, limit int) ([]Employee, int, error) {
 	const op = "model.employees.GetAll"
 
 	log := http_lib.GetCtxLogger(ctx)
 	log = slog.With(slog.String("op", op))
 
 	baseQuery := `
-		SELECT e.id, e.first_name, e.middle_name, e.last_name, 
-		       p.title AS position, d.title AS department, r.title AS role, pr.title AS project, o.city
-		FROM public.employees e
-		JOIN public.positions p ON e.position_id = p.id
-		JOIN public.divisions d ON e.division_id = d.id
-		JOIN public.departments dept ON d.department_id = dept.id
-		JOIN public.roles r ON e.role_id = r.id
-		JOIN public.projects pr ON e.project_id = pr.id
-		JOIN public.offices o ON dept.office_id = o.id
-		ORDER BY e.id LIMIT $1 OFFSET $2`
+    SELECT e.id, e.first_name, e.middle_name, e.last_name, 
+           p.title AS position, d.title AS department, r.title AS role, 
+           pr.title AS project, o.city, 
+           COUNT(*) OVER() AS total_records
+    FROM public.employees e
+    JOIN public.positions p ON e.position_id = p.id
+    JOIN public.divisions d ON e.division_id = d.id
+    JOIN public.departments dept ON d.department_id = dept.id
+    JOIN public.roles r ON e.role_id = r.id
+    JOIN public.projects pr ON e.project_id = pr.id
+    JOIN public.offices o ON dept.office_id = o.id
+    ORDER BY e.id 
+    LIMIT $1 OFFSET $2`
 
 	rows, err := m.pool.Query(ctx, baseQuery, limit, offset)
 	if err != nil {
 		log.Error("failed to get list of employees", sl.Err(err))
-		return nil, fmt.Errorf("%s: %w", op, err)
+		return nil, 0, fmt.Errorf("%s: %w", op, err)
 	}
 	defer rows.Close()
 
+	var total int
 	var employees []Employee
 	for rows.Next() {
 		var e Employee
-		if err := rows.Scan(&e.ID, &e.FirstName, &e.MiddleName, &e.LastName, &e.Position, &e.Department, &e.Role, &e.Project, &e.City); err != nil {
+		if err := rows.Scan(&e.ID, &e.FirstName, &e.MiddleName, &e.LastName, &e.Position, &e.Department, &e.Role, &e.Project, &e.City, &total); err != nil {
 			log.Error("failed to scan employee", sl.Err(err))
-			return nil, fmt.Errorf("%s: %w", op, err)
+			return nil, 0, fmt.Errorf("%s: %w", op, err)
 		}
 		employees = append(employees, e)
 	}
 
 	if err := rows.Err(); err != nil {
 		log.Error("failed to read rows", sl.Err(err))
-		return nil, fmt.Errorf("%s: %w", op, err)
+		return nil, 0, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return employees, nil
+	return employees, total, nil
 }
 
 // GetAllPositions возвращает уникальные должности

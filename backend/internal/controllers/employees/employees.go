@@ -15,7 +15,7 @@ import (
 )
 
 type Model interface {
-	GetAll(ctx context.Context, offset, limit int) ([]model.Employee, error)
+	GetAll(ctx context.Context, offset, limit int) ([]model.Employee, int, error)
 	GetAllPositions(ctx context.Context) ([]string, error)
 	GetAllDepartments(ctx context.Context) ([]string, error)
 	GetAllSubdivisions(ctx context.Context) ([]string, error)
@@ -69,7 +69,7 @@ func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	page, limit := c.parsePagination(r)
 
-	empls, err := c.model.GetAll(r.Context(), (page-1)*limit, limit)
+	empls, total, err := c.model.GetAll(r.Context(), (page-1)*limit, limit)
 	if err != nil {
 		http_lib.ErrInternal(w, r)
 		return
@@ -77,10 +77,8 @@ func (c *Controller) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	filteredEmployees := filterEmployees(empls, filters)
 
-	filteredTotal := len(filteredEmployees)
-
 	response := employeesResponse{
-		Total:     filteredTotal,
+		Total:     total,
 		Page:      page,
 		Limit:     limit,
 		Employees: filteredEmployees,
