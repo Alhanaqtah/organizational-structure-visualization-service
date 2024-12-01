@@ -115,7 +115,14 @@ const mockData: IEmployeeTree = {
 
 export const getEmployeeTreeFx = createEffect(async (id: string) => {
   try {
-    const response = await fetch(`http://localhost:8080/api/employees/tree/${id}`);
+    const response = await fetch(`http://localhost:8080/api/employees/tree/${id}`, {
+      method: 'GET',
+      credentials: 'include',
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
     if (!response.ok) {
       return mockData;
     }

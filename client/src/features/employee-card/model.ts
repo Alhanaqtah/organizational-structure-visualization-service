@@ -1,5 +1,5 @@
 import { createEffect, createEvent, createStore, sample } from 'effector';
-import { IEmployee } from '../../shared/types';
+import { IEmployee, IEmployeeResponse } from '../../shared/types';
 
 export interface QueryParams {
   firstName?: string;
@@ -13,7 +13,7 @@ export interface QueryParams {
   city?: string[];
 }
 
-export const $employeesStore = createStore<IEmployee[]>([]);
+export const $employeesStore = createStore<IEmployee[] | null>([]);
 export const $activeFiltersStore = createStore<QueryParams>({ page: 1, limit: 10 });
 
 export const getEmployeesFx = createEffect(async () => {
@@ -35,8 +35,18 @@ export const getEmployeesFx = createEffect(async () => {
     }
   });
 
-  const result = await fetch(url.toString());
-  return await result.json();
+  const result = await fetch(url.toString(), {
+    method: 'GET',
+    credentials: 'include',
+    mode: 'cors',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data = (await result.json()) as IEmployeeResponse;
+
+  return data.employees;
 });
 
 export const updateFilter = createEvent<{ filter: keyof QueryParams; value: string }>();

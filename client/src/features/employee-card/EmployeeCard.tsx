@@ -10,7 +10,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({ employee }) => {
     <Link to={`info/${employee.id}`}>
       <Card>
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Typography>{`${employee.firstname} ${employee.lastname}`}</Typography>
+          <Typography>{`${employee.first_name} ${employee.last_name}`}</Typography>
           <Typography>{employee.role}</Typography>
           <Typography>{employee.city}</Typography>
           <Button style={{ width: '100%', height: '40px' }} type="primary">

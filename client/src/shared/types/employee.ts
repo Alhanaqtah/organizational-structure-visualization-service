@@ -1,9 +1,22 @@
 export interface IEmployee {
-  firstname: string;
-  lastname: string;
-  role: string;
-  city: string;
   id: string;
+  first_name: string;
+  middle_name: string;
+  last_name: string;
+  position: string;
+  department: string;
+  subdivision: string;
+  role: string;
+  project: string;
+  city: string;
+  hire_date: string;
+}
+
+export interface IEmployeeResponse {
+  total: number;
+  page: number;
+  limit: number;
+  employees: IEmployee[];
 }
 
 export interface IEmployeeTreeEl {

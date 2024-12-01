@@ -18,7 +18,7 @@ const CompanyEmployeesList: React.FC = () => {
       <List
         style={{ height: '100%' }}
         grid={{ gutter: 16, xs: 1, sm: 2, md: 2, lg: 3, xl: 4, xxl: 5 }}
-        dataSource={employeeList}
+        dataSource={employeeList ?? []}
         pagination={{
           onChange: (page) => {
             console.log(page);
